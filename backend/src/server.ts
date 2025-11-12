@@ -172,3 +172,16 @@ app.listen(PORT, () => {
   console.log(`   POST /api/analyze   - Analyze professor reviews`);
   console.log("\n( Ready to analyze professors!\n");
 });
+
+/**
+ * Global error handlers
+ */
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Rejection at:", promise);
+  console.error("Reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("❌ Uncaught Exception:", error);
+  console.error("Stack:", error.stack);
+});
