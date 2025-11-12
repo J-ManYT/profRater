@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(npm install zod@3.25.76 --save-exact --legacy-peer-deps)",
+      "Bash(npm install --legacy-peer-deps)",
+      "Bash(npm dedupe --legacy-peer-deps)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
