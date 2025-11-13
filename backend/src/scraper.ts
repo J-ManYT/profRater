@@ -1,10 +1,15 @@
 /**
  * ProfRater Scraper Module
  * Uses Stagehand with Browserbase for AI-powered web scraping of RateMyProfessor
+ *
+ * FIXED: Proper interaction order with RateMyProfessor
+ * 1. Navigate to site
+ * 2. Search university first, then professor
+ * 3. Load ALL reviews before scraping
  */
 
 import { Stagehand } from "@browserbasehq/stagehand";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { Review, ProfessorInfo, ScraperResult } from "./types";
 
 /**
@@ -13,35 +18,32 @@ import { Review, ProfessorInfo, ScraperResult } from "./types";
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Zod schema for extracting individual reviews
+ * Zod schema for extracting the total number of ratings
  */
-const ReviewSchema = z.object({
-  rating: z.number().describe("The quality rating given by the student (1-5)"),
-  difficulty: z.number().describe("The difficulty rating (1-5)"),
-  course: z.string().describe("The course name or code"),
-  date: z.string().describe("The date of the review"),
-  comment: z.string().describe("The written review comment"),
-  tags: z.array(z.string()).describe("Tags associated with the review (e.g., 'Tough grader', 'Amazing lectures')"),
-  thumbsUp: z.number().describe("Number of helpful votes"),
-  thumbsDown: z.number().describe("Number of not helpful votes"),
+const TotalRatingsSchema = z.object({
+  totalRatings: z.number().describe("The total number of ratings shown on the page"),
 });
 
 /**
- * Zod schema for extracting professor information
+ * Zod schema for extracting the entire page data at once
  */
-const ProfessorInfoSchema = z.object({
+const PageDataSchema = z.object({
+  professorName: z.string().describe("The professor's full name"),
+  department: z.string().describe("Professor's department or subject area"),
   overallRating: z.number().describe("Overall average rating (1-5)"),
   totalRatings: z.number().describe("Total number of ratings"),
   wouldTakeAgainPercent: z.number().describe("Percentage of students who would take again (0-100)"),
   difficultyRating: z.number().describe("Average difficulty rating (1-5)"),
-  department: z.string().describe("Professor's department or subject area"),
-});
-
-/**
- * Zod schema for extracting all reviews from the page
- */
-const ReviewsSchema = z.object({
-  reviews: z.array(ReviewSchema),
+  reviews: z.array(z.object({
+    rating: z.number().describe("The quality rating given by the student (1-5)"),
+    difficulty: z.number().describe("The difficulty rating (1-5)"),
+    course: z.string().describe("The course name or code"),
+    date: z.string().describe("The date of the review"),
+    comment: z.string().describe("The written review comment"),
+    tags: z.array(z.string()).describe("Tags associated with the review (e.g., 'Tough grader', 'Amazing lectures')"),
+    thumbsUp: z.number().describe("Number of helpful votes"),
+    thumbsDown: z.number().describe("Number of not helpful votes"),
+  })).describe("All student reviews visible on the page"),
 });
 
 /**
@@ -56,211 +58,240 @@ export async function scrapeProfessor(
   professorName: string,
   universityName: string
 ): Promise<ScraperResult> {
-  console.log(`🔍 Starting scrape for: ${professorName} at ${universityName}`);
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`🔍 STARTING SCRAPE`);
+  console.log(`   Professor: ${professorName}`);
+  console.log(`   University: ${universityName}`);
+  console.log(`${"=".repeat(60)}\n`);
 
   let stagehand: Stagehand | null = null;
 
   try {
-    // Load and validate OpenAI API key
+    // ============================================================
+    // PHASE 0: INITIALIZATION
+    // ============================================================
+    console.log("📋 PHASE 0: INITIALIZATION");
+    console.log("-".repeat(60));
+
+    // Validate environment variables
     console.log("🔐 Validating environment variables...");
     const openaiApiKey = process.env.OPENAI_API_KEY;
-    if (!openaiApiKey) {
-      throw new Error("OPENAI_API_KEY is not set in environment variables");
-    }
-    console.log(`🔑 OpenAI API Key loaded: ${openaiApiKey.substring(0, 7)}...`);
-
-    // Validate Browserbase credentials
     const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
     const browserbaseProjectId = process.env.BROWSERBASE_PROJECT_ID;
 
+    if (!openaiApiKey) {
+      throw new Error("OPENAI_API_KEY is not set in environment variables");
+    }
     if (!browserbaseApiKey) {
       throw new Error("BROWSERBASE_API_KEY is not set in environment variables");
     }
     if (!browserbaseProjectId) {
       throw new Error("BROWSERBASE_PROJECT_ID is not set in environment variables");
     }
-    console.log(`🔑 Browserbase API Key loaded: ${browserbaseApiKey.substring(0, 7)}...`);
-    console.log(`🔑 Browserbase Project ID: ${browserbaseProjectId}`);
+
+    console.log(`   ✅ OpenAI API Key: ${openaiApiKey.substring(0, 7)}...`);
+    console.log(`   ✅ Browserbase API Key: ${browserbaseApiKey.substring(0, 7)}...`);
+    console.log(`   ✅ Browserbase Project ID: ${browserbaseProjectId}`);
 
     // Initialize Stagehand with Browserbase
-    console.log("🚀 Initializing Stagehand with Browserbase...");
-    try {
-      stagehand = new Stagehand({
-        env: "BROWSERBASE",
-        apiKey: browserbaseApiKey,
-        projectId: browserbaseProjectId,
-        verbose: 1,
-        domSettleTimeout: 1000,
-        model: {
-          modelName: "gpt-4o",
-          apiKey: openaiApiKey,
-        },
-      });
-      console.log("✅ Stagehand instance created");
-    } catch (initError) {
-      console.error("❌ Failed to create Stagehand instance:", initError);
-      throw new Error(`Stagehand initialization failed: ${initError instanceof Error ? initError.message : String(initError)}`);
-    }
+    console.log("\n🚀 Initializing Stagehand with Browserbase...");
+    stagehand = new Stagehand({
+      env: "BROWSERBASE",
+      apiKey: browserbaseApiKey,
+      projectId: browserbaseProjectId,
+      verbose: 1,
+      domSettleTimeout: 1000,
+      model: {
+        modelName: "gpt-4o",
+        apiKey: openaiApiKey,
+      },
+    });
+    console.log("   ✅ Stagehand instance created");
 
     // Initialize the session
-    try {
-      console.log("⏳ Calling stagehand.init()...");
-      await stagehand.init();
-      console.log("✅ Stagehand.init() completed");
-
-      // Give the browser a moment to fully initialize
-      console.log("⏳ Waiting for browser to stabilize...");
-      await wait(2000);
-      console.log("✅ Browser ready");
-    } catch (initError) {
-      console.error("❌ stagehand.init() failed:", initError);
-      console.error("Stack trace:", initError instanceof Error ? initError.stack : "No stack trace");
-      throw new Error(`Failed to initialize Stagehand session: ${initError instanceof Error ? initError.message : String(initError)}`);
-    }
+    console.log("⏳ Initializing browser session...");
+    await stagehand.init();
+    console.log("   ✅ Browser session initialized");
+    await wait(2000);
+    console.log("   ✅ Browser stabilized\n");
 
     // Get the page
-    let page;
-    try {
-      console.log("📄 Getting page from context...");
-      const pages = stagehand.context.pages();
-      console.log(`   Found ${pages.length} page(s) in context`);
-
-      if (pages.length === 0) {
-        throw new Error("No pages found in context after initialization");
-      }
-
-      page = pages[0];
-      console.log("✅ Page object retrieved");
-    } catch (pageError) {
-      console.error("❌ Failed to get page:", pageError);
-      throw new Error(`Failed to get page object: ${pageError instanceof Error ? pageError.message : String(pageError)}`);
+    const pages = stagehand.context.pages();
+    if (pages.length === 0) {
+      throw new Error("No page available after initialization");
     }
+    const page = pages[0];
 
-    // Navigate to RateMyProfessor
-    try {
-      console.log("🌐 Navigating to RateMyProfessor.com...");
-      console.log("   URL: https://www.ratemyprofessors.com/");
-      console.log("   WaitUntil: domcontentloaded");
-      console.log("   Timeout: 60000ms");
+    // ============================================================
+    // PHASE 1: NAVIGATION
+    // ============================================================
+    console.log("📋 PHASE 1: NAVIGATION");
+    console.log("-".repeat(60));
 
-      await page.goto("https://www.ratemyprofessors.com/", {
-        waitUntil: "domcontentloaded",
-        timeoutMs: 60000, // 60 second timeout
-      });
+    // Step 1.1: Navigate to RateMyProfessor
+    console.log("🌐 Step 1.1: Navigating to RateMyProfessor.com...");
+    await page.goto("https://www.ratemyprofessors.com/", {
+      waitUntil: "domcontentloaded",
+    });
+    console.log("   ✅ Page loaded");
+    await wait(2000);
 
-      console.log("✅ Navigation completed");
+    // Step 1.2: Type university name in school search field
+    console.log(`\n🏫 Step 1.2: Searching for university "${universityName}"...`);
+    await stagehand.act(
+      `Type "${universityName}" into the school search field`
+    );
+    console.log("   ✅ University name typed");
+    await wait(1500);
 
-      // Wait for page to fully settle
-      console.log("⏳ Waiting for page to settle...");
-      await wait(3000);
-      console.log("✅ Page fully loaded");
-    } catch (navError) {
-      console.error("❌ Navigation failed:", navError);
-      console.error("Error name:", navError instanceof Error ? navError.name : "unknown");
-      console.error("Error message:", navError instanceof Error ? navError.message : String(navError));
-      console.error("Stack trace:", navError instanceof Error ? navError.stack : "No stack trace");
+    // Step 1.3: Click TOP result from university dropdown
+    console.log("\n👆 Step 1.3: Clicking top university result...");
+    await stagehand.act(
+      "Click on the first/top university in the dropdown results"
+    );
+    console.log("   ✅ University selected");
+    await wait(2000);
 
-      // Try to get current URL for debugging
+    // Step 1.4: Type professor name in professor search field
+    console.log(`\n👨‍🏫 Step 1.4: Searching for professor "${professorName}"...`);
+    await stagehand.act(
+      `Type "${professorName}" into the professor search field`
+    );
+    console.log("   ✅ Professor name typed");
+    await wait(1500);
+
+    // Step 1.5: Click TOP professor result
+    console.log("\n👆 Step 1.5: Clicking top professor result...");
+    await stagehand.act(
+      "Click on the first/top professor in the search results"
+    );
+    console.log("   ✅ Professor page loading...");
+    await wait(3000);
+    console.log("   ✅ Professor page loaded\n");
+
+    // ============================================================
+    // PHASE 2: REVIEW LOADING (CRITICAL)
+    // ============================================================
+    console.log("📋 PHASE 2: REVIEW LOADING");
+    console.log("-".repeat(60));
+
+    // Step 2.1: Extract total number of ratings
+    console.log("📊 Step 2.1: Getting total number of ratings...");
+    const totalRatingsData = await stagehand.extract(
+      "Extract the total number of ratings displayed on this professor's page",
+      TotalRatingsSchema
+    ) as z.infer<typeof TotalRatingsSchema>;
+    const totalRatings = totalRatingsData.totalRatings;
+    console.log(`   ✅ Total ratings found: ${totalRatings}`);
+
+    // Step 2.2: Load ALL reviews by clicking "Show More" / "Load More Ratings"
+    console.log("\n📜 Step 2.2: Loading all reviews...");
+    let clickCount = 0;
+    let maxClicks = Math.ceil(totalRatings / 20); // Estimate max clicks needed (assuming ~20 reviews per page)
+
+    console.log(`   Estimated clicks needed: ${maxClicks}`);
+
+    while (clickCount < maxClicks) {
       try {
-        const currentUrl = await page.evaluate("window.location.href");
-        console.error("Current URL:", currentUrl);
-      } catch (e) {
-        console.error("Could not get current URL");
+        console.log(`   Attempt ${clickCount + 1}/${maxClicks}: Clicking "Load More" button...`);
+
+        await stagehand.act(
+          'Click the "Load More" or "Show More" button to load more ratings'
+        );
+
+        clickCount++;
+        console.log(`   ✅ Click ${clickCount} successful, waiting for reviews to load...`);
+        await wait(2000); // Wait for reviews to load
+
+      } catch (error) {
+        console.log(`   ℹ️  No more "Load More" button found (clicked ${clickCount} times)`);
+        console.log("   ✅ All reviews loaded!");
+        break;
       }
-
-      throw new Error(`Failed to navigate to RateMyProfessors: ${navError instanceof Error ? navError.message : String(navError)}`);
     }
 
-    // Search for the professor
-    try {
-      console.log(`🔎 Searching for "${professorName}" at "${universityName}"...`);
-      await stagehand.act(
-        `Search for professor "${professorName}" at "${universityName}" and press enter or click search`
-      );
-      console.log("✅ Search action completed");
-    } catch (searchError) {
-      console.error("❌ Search failed:", searchError);
-      console.error("Stack trace:", searchError instanceof Error ? searchError.stack : "No stack trace");
-      throw new Error(`Failed to search for professor: ${searchError instanceof Error ? searchError.message : String(searchError)}`);
+    if (clickCount >= maxClicks) {
+      console.log(`   ⚠️  Reached maximum clicks (${maxClicks}), proceeding with loaded reviews`);
     }
 
-    // Wait for search results to load
-    console.log("⏳ Waiting for search results (3s)...");
+    // Give extra time for all reviews to settle
+    console.log("\n⏳ Waiting for all reviews to settle...");
     await wait(3000);
-    console.log("✅ Wait completed");
+    console.log("   ✅ Reviews settled\n");
 
-    // Click on the first professor result
-    try {
-      console.log("👆 Clicking on first professor result...");
-      await stagehand.act(
-        "Click on the first professor result in the search results"
-      );
-      console.log("✅ Click action completed");
-    } catch (clickError) {
-      console.error("❌ Click failed:", clickError);
-      console.error("Stack trace:", clickError instanceof Error ? clickError.stack : "No stack trace");
-      throw new Error(`Failed to click professor result: ${clickError instanceof Error ? clickError.message : String(clickError)}`);
-    }
+    // ============================================================
+    // PHASE 3: SCRAPING
+    // ============================================================
+    console.log("📋 PHASE 3: SCRAPING");
+    console.log("-".repeat(60));
 
-    // Wait for professor page to load
-    console.log("⏳ Waiting for professor page to load (3s)...");
-    await wait(3000);
-    console.log("✅ Professor page should be loaded");
+    console.log("🔍 Extracting all data from page...");
+    const pageData = await stagehand.extract(
+      "Extract all professor information and ALL review cards from the page. Include professor name, department, overall rating, total ratings, would take again percentage, difficulty rating, and every single review with its rating, difficulty, course, date, comment, tags, thumbs up count, and thumbs down count.",
+      PageDataSchema
+    ) as z.infer<typeof PageDataSchema>;
 
-    // Extract professor information using AI
-    try {
-      console.log("📊 Extracting professor information...");
-      const professorInfo = await stagehand.extract(
-        "Extract the professor's overall statistics and information from the page",
-        ProfessorInfoSchema
-      );
-      console.log(`✅ Professor info extracted: ${professorInfo.overallRating}/5 (${professorInfo.totalRatings} ratings)`);
+    console.log("   ✅ Data extracted successfully!");
+    console.log(`   Professor: ${pageData.professorName}`);
+    console.log(`   Department: ${pageData.department}`);
+    console.log(`   Overall Rating: ${pageData.overallRating}/5`);
+    console.log(`   Total Ratings: ${pageData.totalRatings}`);
+    console.log(`   Would Take Again: ${pageData.wouldTakeAgainPercent}%`);
+    console.log(`   Difficulty: ${pageData.difficultyRating}/5`);
+    console.log(`   Reviews Scraped: ${pageData.reviews.length}`);
 
-      // Extract all reviews using AI
-      console.log("💬 Extracting reviews...");
-      const { reviews } = await stagehand.extract(
-        "Extract all visible student reviews from the page. Each review should include the rating, difficulty, course, date, comment, tags, and vote counts.",
-        ReviewsSchema
-      );
-      console.log(`✅ Extracted ${reviews.length} reviews`);
+    // ============================================================
+    // CLEANUP
+    // ============================================================
+    console.log("\n🔚 Closing browser session...");
+    await stagehand.close();
+    console.log("   ✅ Browser closed");
 
-      // End the session
-      console.log("🔚 Closing browser session...");
-      await stagehand.close();
-      console.log("🎉 Scraping completed successfully!");
+    console.log(`\n${"=".repeat(60)}`);
+    console.log(`🎉 SCRAPING COMPLETED SUCCESSFULLY`);
+    console.log(`   Total Reviews: ${pageData.reviews.length}`);
+    console.log(`${"=".repeat(60)}\n`);
 
-      return {
-        reviews,
-        professorInfo,
-      };
-    } catch (extractError) {
-      console.error("❌ Extraction failed:", extractError);
-      console.error("Stack trace:", extractError instanceof Error ? extractError.stack : "No stack trace");
-      throw new Error(`Failed to extract data: ${extractError instanceof Error ? extractError.message : String(extractError)}`);
-    }
+    // Return data in expected format
+    return {
+      professorInfo: {
+        overallRating: pageData.overallRating,
+        totalRatings: pageData.totalRatings,
+        wouldTakeAgainPercent: pageData.wouldTakeAgainPercent,
+        difficultyRating: pageData.difficultyRating,
+        department: pageData.department,
+      },
+      reviews: pageData.reviews,
+    };
+
   } catch (error) {
-    console.error("❌❌❌ SCRAPER ERROR ❌❌❌");
+    console.error("\n" + "=".repeat(60));
+    console.error("❌ SCRAPER ERROR");
+    console.error("=".repeat(60));
     console.error("Error type:", error instanceof Error ? error.constructor.name : typeof error);
     console.error("Error message:", error instanceof Error ? error.message : String(error));
-    console.error("Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+
     if (error instanceof Error && error.stack) {
-      console.error("Stack trace:", error.stack);
+      console.error("\nStack trace:");
+      console.error(error.stack);
     }
 
-    // Re-throw with detailed error message
+    // Re-throw with context
     throw new Error(
-      `Failed to scrape professor data: ${error instanceof Error ? error.message : "Unknown error"}. Check logs for details.`
+      `Failed to scrape professor data for ${professorName} at ${universityName}: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
     );
+
   } finally {
-    // Ensure browser is closed
+    // Ensure browser is always closed
     if (stagehand !== null) {
       try {
-        console.log("🧹 Attempting to close browser session...");
+        console.log("\n🧹 Ensuring browser cleanup...");
         await stagehand.close();
-        console.log("✅ Browser session closed");
+        console.log("   ✅ Cleanup complete");
       } catch (closeError) {
-        console.error("⚠️  Error closing session:", closeError);
-        console.error("Close error details:", closeError instanceof Error ? closeError.message : String(closeError));
+        console.error("   ⚠️  Error during cleanup:", closeError instanceof Error ? closeError.message : String(closeError));
       }
     }
   }

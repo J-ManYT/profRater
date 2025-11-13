@@ -57,14 +57,14 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
       return;
     }
 
-    console.log("\n<¯ New analysis request:");
+    console.log("\n<ï¿½ New analysis request:");
     console.log(`   Professor: ${professorName}`);
     console.log(`   University: ${university}`);
     if (course) console.log(`   Course filter: ${course}`);
     if (userQuestion) console.log(`   User question: ${userQuestion}`);
 
     // Step 1: Scrape professor data
-    console.log("\n=á Step 1: Scraping professor data...");
+    console.log("\n=ï¿½ Step 1: Scraping professor data...");
     const scraperResult = await scrapeProfessor(professorName, university);
     const { reviews, professorInfo } = scraperResult;
 
@@ -79,7 +79,8 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
     // Step 2: Filter by course if specified
     let filteredReviews = reviews;
     if (course) {
-      console.log(`\n= Filtering reviews for course: ${course}`);
+      console.log(`\n=
+ Filtering reviews for course: ${course}`);
       filteredReviews = reviews.filter((review) =>
         review.course.toLowerCase().includes(course.toLowerCase())
       );
@@ -164,8 +165,8 @@ app.use((req: Request, res: Response) => {
  * Start server
  */
 app.listen(PORT, () => {
-  console.log("\n=€ ProfRater API Server");
-  console.log(`=á Server running on http://localhost:${PORT}`);
+  console.log("\n=ï¿½ ProfRater API Server");
+  console.log(`=ï¿½ Server running on http://localhost:${PORT}`);
   console.log(` Environment: ${process.env.NODE_ENV || "development"}`);
   console.log("\nEndpoints:");
   console.log(`   GET  /              - Health check`);
