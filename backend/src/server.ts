@@ -45,8 +45,7 @@ app.get("/", (req: Request, res: Response) => {
  */
 app.post("/api/analyze", async (req: Request, res: Response) => {
   try {
-    const { professorName, university, course, userQuestion } =
-      req.body as AnalysisRequest;
+    const { professorName, university } = req.body as AnalysisRequest;
 
     // Validate required fields
     if (!professorName || !university) {
@@ -60,8 +59,6 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
     console.log("\n<� New analysis request:");
     console.log(`   Professor: ${professorName}`);
     console.log(`   University: ${university}`);
-    if (course) console.log(`   Course filter: ${course}`);
-    if (userQuestion) console.log(`   User question: ${userQuestion}`);
 
     // Step 1: Scrape professor data
     console.log("\n=� Step 1: Scraping professor data...");
@@ -76,42 +73,17 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
       return;
     }
 
-    // Step 2: Filter by course if specified
-    let filteredReviews = reviews;
-    if (course) {
-      console.log(`\n=
- Filtering reviews for course: ${course}`);
-      filteredReviews = reviews.filter((review) =>
-        review.course.toLowerCase().includes(course.toLowerCase())
-      );
-      console.log(`   Found ${filteredReviews.length} reviews for ${course}`);
-
-      if (filteredReviews.length === 0) {
-        res.status(404).json({
-          success: false,
-          error: `No reviews found for course "${course}". Total reviews available: ${reviews.length}`,
-        });
-        return;
-      }
-    }
-
-    // Step 3: Analyze with AI
-    console.log("\n> Step 2: Analyzing with Claude AI...");
-    const summary = await analyzeWithAI(
-      filteredReviews,
-      professorInfo,
-      userQuestion
-    );
+    // Step 2: Analyze with AI
+    console.log("\n🤖 Step 2: Analyzing with Claude AI...");
+    const summary = await analyzeWithAI(reviews, professorInfo);
 
     // Calculate stats
     const stats = {
       averageRating:
-        filteredReviews.reduce((sum, r) => sum + r.rating, 0) /
-        filteredReviews.length,
-      totalReviews: filteredReviews.length,
+        reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length,
+      totalReviews: reviews.length,
       averageDifficulty:
-        filteredReviews.reduce((sum, r) => sum + r.difficulty, 0) /
-        filteredReviews.length,
+        reviews.reduce((sum, r) => sum + r.difficulty, 0) / reviews.length,
       wouldTakeAgain: professorInfo.wouldTakeAgainPercent,
     };
 
@@ -125,7 +97,7 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
       success: true,
       summary,
       stats,
-      reviews: filteredReviews,
+      reviews,
       professorInfo,
     };
 

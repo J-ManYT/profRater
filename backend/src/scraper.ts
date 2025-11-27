@@ -25,25 +25,59 @@ const TotalRatingsSchema = z.object({
 });
 
 /**
+ * TypeScript type for extracted review data
+ */
+type ExtractedReview = {
+  rating: number;
+  difficulty?: number;
+  course?: string;
+  date: string;
+  comment: string;
+  tags?: string[];
+  thumbsUp?: number;
+  thumbsDown?: number;
+};
+
+/**
+ * TypeScript type for extracted page data
+ */
+type ExtractedPageData = {
+  professorName: string;
+  department?: string;
+  overallRating: number;
+  totalRatings: number;
+  wouldTakeAgainPercent?: number;
+  difficultyRating?: number;
+  reviews: ExtractedReview[];
+};
+
+/**
+ * Zod schema for a single review
+ * Extracted separately to avoid deep type instantiation issues
+ */
+const ReviewSchema = z.object({
+  rating: z.number().describe("The quality rating given by the student (1-5)"),
+  difficulty: z.number().optional().describe("The difficulty rating (1-5). May not be present for all reviews."),
+  course: z.string().optional().describe("The course name or code. If not visible, omit it."),
+  date: z.string().describe("The date of the review"),
+  comment: z.string().describe("The written review comment"),
+  tags: z.array(z.string()).optional().describe("Tags associated with the review (e.g., 'Tough grader', 'Amazing lectures'). Omit if no tags."),
+  thumbsUp: z.number().optional().describe("Number of helpful votes. Omit if not visible."),
+  thumbsDown: z.number().optional().describe("Number of not helpful votes. Omit if not visible."),
+});
+
+/**
  * Zod schema for extracting the entire page data at once
+ * Made flexible to handle professors with incomplete data
  */
 const PageDataSchema = z.object({
   professorName: z.string().describe("The professor's full name"),
-  department: z.string().describe("Professor's department or subject area"),
+  department: z.string().optional().describe("Professor's department or subject area. If not found, omit it."),
   overallRating: z.number().describe("Overall average rating (1-5)"),
   totalRatings: z.number().describe("Total number of ratings"),
-  wouldTakeAgainPercent: z.number().describe("Percentage of students who would take again (0-100)"),
-  difficultyRating: z.number().describe("Average difficulty rating (1-5)"),
-  reviews: z.array(z.object({
-    rating: z.number().describe("The quality rating given by the student (1-5)"),
-    difficulty: z.number().describe("The difficulty rating (1-5)"),
-    course: z.string().describe("The course name or code"),
-    date: z.string().describe("The date of the review"),
-    comment: z.string().describe("The written review comment"),
-    tags: z.array(z.string()).describe("Tags associated with the review (e.g., 'Tough grader', 'Amazing lectures')"),
-    thumbsUp: z.number().describe("Number of helpful votes"),
-    thumbsDown: z.number().describe("Number of not helpful votes"),
-  })).describe("All student reviews visible on the page"),
+  wouldTakeAgainPercent: z.number().optional().describe("Percentage of students who would take again (0-100). This may not be available for all professors."),
+  difficultyRating: z.number().optional().describe("Average difficulty rating (1-5). This may not be available for all professors."),
+  reviews: z.array(ReviewSchema).describe("All student reviews visible on the page"),
 });
 
 /**
@@ -123,51 +157,30 @@ export async function scrapeProfessor(
     const page = pages[0];
 
     // ============================================================
-    // PHASE 1: NAVIGATION
+    // PHASE 1: NAVIGATION (SIMPLIFIED - USING SEARCH URL)
     // ============================================================
     console.log("📋 PHASE 1: NAVIGATION");
     console.log("-".repeat(60));
 
-    // Step 1.1: Navigate to RateMyProfessor
-    console.log("🌐 Step 1.1: Navigating to RateMyProfessor.com...");
-    await page.goto("https://www.ratemyprofessors.com/", {
-      waitUntil: "domcontentloaded",
-    });
-    console.log("   ✅ Page loaded");
-    await wait(2000);
+    // Build search URL directly to bypass unreliable UI
+    const searchQuery = `${professorName} ${universityName}`;
+    const searchUrl = `https://www.ratemyprofessors.com/search/professors?q=${encodeURIComponent(searchQuery)}`;
 
-    // Step 1.2: Type university name in school search field
-    console.log(`\n🏫 Step 1.2: Searching for university "${universityName}"...`);
-    await stagehand.act(
-      `Type "${universityName}" into the school search field`
-    );
-    console.log("   ✅ University name typed");
-    await wait(1500);
+    console.log(`🔍 Navigating directly to search: ${searchUrl}`);
+    await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
+    await wait(5000); // Wait for search results
 
-    // Step 1.3: Click TOP result from university dropdown
-    console.log("\n👆 Step 1.3: Clicking top university result...");
-    await stagehand.act(
-      "Click on the first/top university in the dropdown results"
-    );
-    console.log("   ✅ University selected");
-    await wait(2000);
+    console.log(`👆 Clicking first professor result...`);
+    await stagehand.act(`Click on the first professor card in the search results`);
+    await wait(4000);
 
-    // Step 1.4: Type professor name in professor search field
-    console.log(`\n👨‍🏫 Step 1.4: Searching for professor "${professorName}"...`);
-    await stagehand.act(
-      `Type "${professorName}" into the professor search field`
-    );
-    console.log("   ✅ Professor name typed");
-    await wait(1500);
-
-    // Step 1.5: Click TOP professor result
-    console.log("\n👆 Step 1.5: Clicking top professor result...");
-    await stagehand.act(
-      "Click on the first/top professor in the search results"
-    );
-    console.log("   ✅ Professor page loading...");
-    await wait(3000);
-    console.log("   ✅ Professor page loaded\n");
+    // Validate we're on a professor page
+    console.log("🔍 Validating professor page...");
+    const currentUrl = page.url();
+    if (!currentUrl.includes("ratemyprofessors.com/professor/")) {
+      throw new Error(`Navigation failed: Not on a professor page. Current URL: ${currentUrl}`);
+    }
+    console.log(`   ✅ Confirmed on professor page: ${currentUrl}\n`);
 
     // ============================================================
     // PHASE 2: REVIEW LOADING (CRITICAL)
@@ -175,47 +188,49 @@ export async function scrapeProfessor(
     console.log("📋 PHASE 2: REVIEW LOADING");
     console.log("-".repeat(60));
 
-    // Step 2.1: Extract total number of ratings
-    console.log("📊 Step 2.1: Getting total number of ratings...");
-    const totalRatingsData = await stagehand.extract(
-      "Extract the total number of ratings displayed on this professor's page",
-      TotalRatingsSchema
-    ) as z.infer<typeof TotalRatingsSchema>;
-    const totalRatings = totalRatingsData.totalRatings;
-    console.log(`   ✅ Total ratings found: ${totalRatings}`);
+    // Step 2.1: Scroll down to ensure page is loaded
+    console.log("📜 Step 2.1: Scrolling to load initial reviews...");
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    await wait(2000);
+    console.log("   ✅ Initial scroll complete");
 
-    // Step 2.2: Load ALL reviews by clicking "Show More" / "Load More Ratings"
-    console.log("\n📜 Step 2.2: Loading all reviews...");
+    // Step 2.2: Load reviews by clicking "Load More" button a few times
+    console.log("\n📜 Step 2.2: Loading reviews...");
     let clickCount = 0;
-    let maxClicks = Math.ceil(totalRatings / 20); // Estimate max clicks needed (assuming ~20 reviews per page)
+    const maxAttempts = 3; // Load first ~60 reviews (20 per click) to avoid timeout
 
-    console.log(`   Estimated clicks needed: ${maxClicks}`);
-
-    while (clickCount < maxClicks) {
+    while (clickCount < maxAttempts) {
       try {
-        console.log(`   Attempt ${clickCount + 1}/${maxClicks}: Clicking "Load More" button...`);
+        console.log(`   Attempt ${clickCount + 1}: Looking for "Load More" button...`);
 
+        // Try to click the load more button
         await stagehand.act(
-          'Click the "Load More" or "Show More" button to load more ratings'
+          'Look for a button that loads more reviews. It might say "Load More Ratings", "Show More", or similar. Click it to display additional reviews. The button is typically located at the bottom of the reviews section.'
         );
 
         clickCount++;
-        console.log(`   ✅ Click ${clickCount} successful, waiting for reviews to load...`);
-        await wait(2000); // Wait for reviews to load
+        console.log(`   ✅ Clicked "Load More" (${clickCount} times), waiting for new reviews...`);
+
+        // Wait for new reviews to load
+        await wait(2500);
+
+        // Scroll down again to ensure new reviews are visible
+        await page.evaluate(() => {
+          window.scrollTo(0, document.body.scrollHeight);
+        });
+        await wait(1000);
 
       } catch (error) {
-        console.log(`   ℹ️  No more "Load More" button found (clicked ${clickCount} times)`);
+        console.log(`   ℹ️  No more "Load More" button found after ${clickCount} clicks`);
         console.log("   ✅ All reviews loaded!");
         break;
       }
     }
 
-    if (clickCount >= maxClicks) {
-      console.log(`   ⚠️  Reached maximum clicks (${maxClicks}), proceeding with loaded reviews`);
-    }
-
-    // Give extra time for all reviews to settle
-    console.log("\n⏳ Waiting for all reviews to settle...");
+    // Give extra time for all reviews to fully render
+    console.log("\n⏳ Waiting for all reviews to fully render...");
     await wait(3000);
     console.log("   ✅ Reviews settled\n");
 
@@ -227,17 +242,34 @@ export async function scrapeProfessor(
 
     console.log("🔍 Extracting all data from page...");
     const pageData = await stagehand.extract(
-      "Extract all professor information and ALL review cards from the page. Include professor name, department, overall rating, total ratings, would take again percentage, difficulty rating, and every single review with its rating, difficulty, course, date, comment, tags, thumbs up count, and thumbs down count.",
-      PageDataSchema
-    ) as z.infer<typeof PageDataSchema>;
+      `Extract all professor information and ALL review cards visible on the page.
+
+      IMPORTANT: Some fields may not be present - only include them if they are clearly visible:
+      - Department: include if visible, otherwise omit
+      - Would Take Again percentage: include if shown, otherwise omit
+      - Difficulty rating: include if shown, otherwise omit
+
+      For each review, extract what is visible:
+      - Rating (always present)
+      - Difficulty (include if shown, otherwise omit)
+      - Course name (include if shown, otherwise omit)
+      - Date (always present)
+      - Comment text (always present)
+      - Tags (include if present, otherwise omit)
+      - Thumbs up count (include if shown, otherwise omit)
+      - Thumbs down count (include if shown, otherwise omit)
+
+      Extract every single review card that is currently loaded on the page.`,
+      PageDataSchema as any
+    ) as ExtractedPageData;
 
     console.log("   ✅ Data extracted successfully!");
     console.log(`   Professor: ${pageData.professorName}`);
-    console.log(`   Department: ${pageData.department}`);
+    console.log(`   Department: ${pageData.department ?? 'Not specified'}`);
     console.log(`   Overall Rating: ${pageData.overallRating}/5`);
     console.log(`   Total Ratings: ${pageData.totalRatings}`);
-    console.log(`   Would Take Again: ${pageData.wouldTakeAgainPercent}%`);
-    console.log(`   Difficulty: ${pageData.difficultyRating}/5`);
+    console.log(`   Would Take Again: ${pageData.wouldTakeAgainPercent !== undefined ? pageData.wouldTakeAgainPercent + '%' : 'N/A'}`);
+    console.log(`   Difficulty: ${pageData.difficultyRating !== undefined ? pageData.difficultyRating + '/5' : 'N/A'}`);
     console.log(`   Reviews Scraped: ${pageData.reviews.length}`);
 
     // ============================================================
@@ -252,16 +284,25 @@ export async function scrapeProfessor(
     console.log(`   Total Reviews: ${pageData.reviews.length}`);
     console.log(`${"=".repeat(60)}\n`);
 
-    // Return data in expected format
+    // Return data in expected format with defaults for optional fields
     return {
       professorInfo: {
         overallRating: pageData.overallRating,
         totalRatings: pageData.totalRatings,
-        wouldTakeAgainPercent: pageData.wouldTakeAgainPercent,
-        difficultyRating: pageData.difficultyRating,
-        department: pageData.department,
+        wouldTakeAgainPercent: pageData.wouldTakeAgainPercent ?? 0,
+        difficultyRating: pageData.difficultyRating ?? 0,
+        department: pageData.department ?? "Not specified",
       },
-      reviews: pageData.reviews,
+      reviews: pageData.reviews.map(review => ({
+        rating: review.rating,
+        difficulty: review.difficulty ?? 0,
+        course: review.course ?? "Not specified",
+        date: review.date,
+        comment: review.comment,
+        tags: review.tags ?? [],
+        thumbsUp: review.thumbsUp ?? 0,
+        thumbsDown: review.thumbsDown ?? 0,
+      })),
     };
 
   } catch (error) {
