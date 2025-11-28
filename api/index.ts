@@ -5,4 +5,7 @@ import app from '../backend/src/server';
 import 'pino-pretty';
 
 // Wrap Express app with serverless-http for proper serverless handling
-export default serverless(app);
+// basePath strips '/api' from requests so Express routes match
+export default serverless(app, {
+  basePath: '/api'
+});
