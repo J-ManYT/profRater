@@ -1,3 +1,8 @@
 {
-  "installCommand": "cd backend && npm install"
+  "installCommand": "cd backend && npm install",
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60
+    }
+  }
 }
