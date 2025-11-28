@@ -22,6 +22,7 @@
     "pino-pretty": "^10.2.0",
     "puppeteer": "^24.29.1",
     "serverless-http": "^4.0.0",
+    "thread-stream": "^2.4.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
