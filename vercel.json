@@ -1,6 +1,5 @@
 {
   "installCommand": "cd backend && npm install",
-  "outputDirectory": "frontend/dist",
   "rewrites": [
     {
       "source": "/api/:path*",

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProfRater - AI-Powered Professor Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: linear-gradient(135deg, #0f1419 0%, #1a1d2e 50%, #252a3d 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            margin-top: 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeIn 0.8s ease-in;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #4169E1 0%, #6B8FFF 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            font-weight: 400;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            animation: slideUp 0.8s ease-out;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(65, 105, 225, 0.2);
+            border-radius: 12px;
+            color: #ffffff;
+            font-size: 1rem;
+            font-family: 'Montserrat', sans-serif;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        input[type="text"]:focus {
+            border-color: #4169E1;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 4px rgba(65, 105, 225, 0.1);
+        }
+
+        input[type="text"]::placeholder {
+            color: #64748b;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 35px;
+        }
+
+        button {
+            flex: 1;
+            padding: 18px 32px;
+            background: linear-gradient(135deg, #4169E1 0%, #5B7FE6 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'Montserrat', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        button:hover:not(:disabled) {
+            background: linear-gradient(135deg, #5B7FE6 0%, #4169E1 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(65, 105, 225, 0.4);
+        }
+
+        button:disabled {
+            background: rgba(255, 255, 255, 0.1);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .reset-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(65, 105, 225, 0.3);
+        }
+
+        .reset-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #4169E1;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid rgba(65, 105, 225, 0.2);
+            border-top: 4px solid #4169E1;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        .loading-text {
+            color: #94a3b8;
+            font-size: 1rem;
+        }
+
+        .results {
+            display: none;
+            margin-top: 40px;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(65, 105, 225, 0.1);
+            border: 1px solid rgba(65, 105, 225, 0.2);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #4169E1;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .summary {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-left: 4px solid #4169E1;
+        }
+
+        .summary h3 {
+            color: #4169E1;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .summary-content {
+            color: #cbd5e1;
+            line-height: 1.8;
+            font-size: 1rem;
+        }
+
+        .professor-info {
+            background: rgba(65, 105, 225, 0.05);
+            border: 1px solid rgba(65, 105, 225, 0.15);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .professor-info h3 {
+            color: #ffffff;
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .professor-info p {
+            color: #94a3b8;
+            font-size: 1rem;
+        }
+
+        .error {
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            color: #fca5a5;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+
+            .card {
+                padding: 25px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ProfRater</h1>
+            <p class="subtitle">AI-Powered Professor Review Analysis</p>
+        </header>
+
+        <div class="card">
+            <form id="analyzeForm">
+                <div class="form-group">
+                    <label for="professorName">Professor Name</label>
+                    <input
+                        type="text"
+                        id="professorName"
+                        name="professorName"
+                        placeholder="e.g., Mark Guzdial"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="university">University</label>
+                    <input
+                        type="text"
+                        id="university"
+                        name="university"
+                        placeholder="e.g., University of Michigan"
+                        required
+                    >
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" id="analyzeBtn">Analyze Professor</button>
+                    <button type="button" class="reset-btn" id="resetBtn">Reset</button>
+                </div>
+            </form>
+
+            <div class="error" id="errorMessage"></div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p class="loading-text">Analyzing professor reviews... This may take a minute.</p>
+            </div>
+        </div>
+
+        <div class="results" id="results">
+            <div class="professor-info" id="professorInfo"></div>
+
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <div class="summary">
+                <h3>AI Analysis Summary</h3>
+                <div class="summary-content" id="summaryContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Use relative URL for production, localhost for development
+        const API_URL = window.location.hostname === 'localhost'
+            ? 'http://localhost:3001/api/analyze'
+            : '/api/analyze';
+
+        const form = document.getElementById('analyzeForm');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const errorMessage = document.getElementById('errorMessage');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Get form data
+            const formData = {
+                professorName: document.getElementById('professorName').value.trim(),
+                university: document.getElementById('university').value.trim()
+            };
+
+            // Reset UI
+            errorMessage.classList.remove('active');
+            results.classList.remove('active');
+            loading.classList.add('active');
+            analyzeBtn.disabled = true;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Unknown error occurred');
+                }
+
+                displayResults(data);
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                loading.classList.remove('active');
+                analyzeBtn.disabled = false;
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            form.reset();
+            results.classList.remove('active');
+            errorMessage.classList.remove('active');
+        });
+
+        function displayResults(data) {
+            const { summary, stats, professorInfo } = data;
+
+            // Display professor info
+            document.getElementById('professorInfo').innerHTML = `
+                <h3>${data.reviews[0]?.course.split(' ')[0] || 'Professor'} - ${professorInfo.department}</h3>
+                <p>${stats.totalReviews} reviews analyzed</p>
+            `;
+
+            // Display stats
+            document.getElementById('statsGrid').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${stats.averageRating.toFixed(1)}</div>
+                    <div class="stat-label">Avg Rating</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.averageDifficulty.toFixed(1)}</div>
+                    <div class="stat-label">Difficulty</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.wouldTakeAgain}%</div>
+                    <div class="stat-label">Would Retake</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.totalReviews}</div>
+                    <div class="stat-label">Total Reviews</div>
+                </div>
+            `;
+
+            // Display summary
+            document.getElementById('summaryContent').innerHTML = summary.replace(/\n/g, '<br><br>');
+
+            results.classList.add('active');
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('active');
+        }
+    </script>
+</body>
+</html>
