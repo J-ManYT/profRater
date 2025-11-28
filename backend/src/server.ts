@@ -40,10 +40,10 @@ app.get("/", (req: Request, res: Response) => {
 
 /**
  * Main analysis endpoint
- * POST /analyze (accessed via /api/analyze through Vercel rewrites)
+ * POST /api/analyze
  * Body: { professorName: string, university: string, course?: string, userQuestion?: string }
  */
-app.post("/analyze", async (req: Request, res: Response) => {
+app.post("/api/analyze", async (req: Request, res: Response) => {
   try {
     const { professorName, university } = req.body as AnalysisRequest;
 
