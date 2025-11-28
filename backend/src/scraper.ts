@@ -133,7 +133,7 @@ export async function scrapeProfessor(
       env: "BROWSERBASE",
       apiKey: browserbaseApiKey,
       projectId: browserbaseProjectId,
-      verbose: 1,
+      verbose: 0, // Disable verbose logging for serverless compatibility
       domSettleTimeout: 1000,
       model: {
         modelName: "gpt-4o",
