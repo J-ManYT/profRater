@@ -1,9 +1,5 @@
 {
   "name": "prof-rater",
   "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "install-backend": "cd backend && npm install",
-    "build": "cd backend && npm run build"
-  }
+  "private": true
 }
