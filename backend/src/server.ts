@@ -145,3 +145,6 @@ app.listen(PORT, () => {
   console.log(`   POST /api/analyze   - Analyze professor reviews`);
   console.log("\n( Ready to analyze professors!\n");
 });
+
+// Export for Vercel serverless functions
+export default app;

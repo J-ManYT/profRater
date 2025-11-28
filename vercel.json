@@ -1,0 +1,11 @@
+{
+  "installCommand": "cd backend && npm install",
+  "buildCommand": "cd backend && npm run build",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
+    }
+  ]
+}
