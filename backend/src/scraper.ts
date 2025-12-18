@@ -170,8 +170,19 @@ export async function scrapeProfessor(
     await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
     await wait(5000); // Wait for search results
 
-    console.log(`👆 Clicking first professor result...`);
-    await stagehand.act(`Click on the first professor card in the search results`);
+    console.log(`👆 Finding first professor URL...`);
+    const firstProfUrl = await page.evaluate(() => {
+      const firstCard = document.querySelector('a[href*="/professor/"]') as HTMLAnchorElement;
+      return firstCard ? firstCard.href : null;
+    });
+
+    if (!firstProfUrl) {
+      throw new Error('No professor found in search results. The professor may not exist or the search failed.');
+    }
+
+    console.log(`   ✅ Found: ${firstProfUrl}`);
+    console.log(`🔗 Navigating to professor page...`);
+    await page.goto(firstProfUrl, { waitUntil: 'domcontentloaded' });
     await wait(4000);
 
     // Validate we're on a professor page
