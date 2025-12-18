@@ -196,43 +196,10 @@ export async function scrapeProfessor(
     await wait(2000);
     console.log("   ✅ Initial scroll complete");
 
-    // Step 2.2: Load reviews by clicking "Load More" button a few times
-    console.log("\n📜 Step 2.2: Loading reviews...");
-    let clickCount = 0;
-    const maxAttempts = 3; // Load first ~60 reviews (20 per click) to avoid timeout
-
-    while (clickCount < maxAttempts) {
-      try {
-        console.log(`   Attempt ${clickCount + 1}: Looking for "Load More" button...`);
-
-        // Try to click the load more button
-        await stagehand.act(
-          'Look for a button that loads more reviews. It might say "Load More Ratings", "Show More", or similar. Click it to display additional reviews. The button is typically located at the bottom of the reviews section.'
-        );
-
-        clickCount++;
-        console.log(`   ✅ Clicked "Load More" (${clickCount} times), waiting for new reviews...`);
-
-        // Wait for new reviews to load
-        await wait(2500);
-
-        // Scroll down again to ensure new reviews are visible
-        await page.evaluate(() => {
-          window.scrollTo(0, document.body.scrollHeight);
-        });
-        await wait(1000);
-
-      } catch (error) {
-        console.log(`   ℹ️  No more "Load More" button found after ${clickCount} clicks`);
-        console.log("   ✅ All reviews loaded!");
-        break;
-      }
-    }
-
-    // Give extra time for all reviews to fully render
-    console.log("\n⏳ Waiting for all reviews to fully render...");
+    // Step 2.2: Wait for initial reviews to load
+    console.log("\n📜 Step 2.2: Waiting for initial reviews to load...");
     await wait(3000);
-    console.log("   ✅ Reviews settled\n");
+    console.log("   ✅ Initial reviews loaded (will scrape ~20-30 reviews)\n");
 
     // ============================================================
     // PHASE 3: SCRAPING
