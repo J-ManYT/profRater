@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-background text-white antialiased;
+}
+
+.glass-card {
+  @apply backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl;
+}
+
+.glass-button {
+  @apply backdrop-blur-xl bg-primary/20 border border-primary/30 hover:bg-primary/30 transition-all duration-300 rounded-xl shadow-lg hover:shadow-primary/20;
+}
+
+.loading-dots::after {
+  content: '';
+  animation: dots 1.5s infinite;
+}
+
+@keyframes dots {
+  0%, 20% {
+    content: '';
+  }
+  40% {
+    content: '.';
+  }
+  60% {
+    content: '..';
+  }
+  80%, 100% {
+    content: '...';
+  }
+}
