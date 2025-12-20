@@ -4,6 +4,12 @@ AI-powered professor insights from RateMyProfessor reviews. No more scrolling th
 
 🔗 **Live Demo:** https://prof-rater-beta.vercel.app/
 
+## Demo
+
+[![ProfRater Demo](https://img.youtube.com/vi/I7uPVNkv1q8/maxresdefault.jpg)](https://youtu.be/I7uPVNkv1q8)
+
+*Click the image above to watch a 30-second demo*
+
 ![ProfRater Interface](images/Updated%20Frontend.png)
 
 ## What it does
